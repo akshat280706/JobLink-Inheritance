@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Mail, Lock, Eye, EyeOff } from 'lucide-react';
+import { Mail, Lock, Eye, EyeOff, User, Building } from 'lucide-react';
 import { useAuthStore } from '../../store/authStore';
 import { supabase } from '../../utils/supabase';
 import toast from 'react-hot-toast';
@@ -10,6 +10,8 @@ const LoginForm = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
+  const [showUserTypeModal, setShowUserTypeModal] = useState(false);
+  const [selectedUserType, setSelectedUserType] = useState('candidate');
 
   const { login, isLoading } = useAuthStore();
   const navigate = useNavigate();
@@ -33,9 +35,12 @@ const LoginForm = () => {
     }
   };
 
-  const handleGoogleSignIn = async () => {
+  const handleGoogleSignIn = async (userType) => {
     setIsGoogleLoading(true);
     try {
+      // Store user type for callback handler
+      localStorage.setItem('oauth_user_type', userType);
+
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
@@ -56,6 +61,7 @@ const LoginForm = () => {
       console.error('Google sign-in error:', err);
     } finally {
       setIsGoogleLoading(false);
+      setShowUserTypeModal(false);
     }
   };
 
@@ -68,10 +74,10 @@ const LoginForm = () => {
         </div>
       )}
 
-      {/* Google Sign In Button */}
+      {/* Google Sign In Button - Opens Modal */}
       <button
         type="button"
-        onClick={handleGoogleSignIn}
+        onClick={() => setShowUserTypeModal(true)}
         disabled={isGoogleLoading}
         className="w-full btn btn-lg bg-white hover:bg-gray-50 text-gray-700 border-2 border-gray-300 rounded-md"
       >
@@ -89,6 +95,77 @@ const LoginForm = () => {
           </>
         )}
       </button>
+
+      {/* User Type Selection Modal */}
+      {showUserTypeModal && (
+        <dialog className="modal modal-open">
+          <div className="modal-box">
+            <h3 className="font-bold text-lg mb-4">Select Account Type</h3>
+            <p className="text-gray-600 mb-6">
+              Are you signing in as a job seeker or employer?
+            </p>
+
+            <div className="grid grid-cols-2 gap-4 mb-6">
+              <button
+                onClick={() => setSelectedUserType('candidate')}
+                className={`btn h-auto py-6 rounded-md flex flex-col items-center gap-3 ${
+                  selectedUserType === 'candidate'
+                    ? 'bg-gray-900 text-white border-0'
+                    : 'btn-outline border-2 border-gray-300'
+                }`}
+              >
+                <User className="w-8 h-8" />
+                <div className="text-center">
+                  <div className="font-semibold">Job Seeker</div>
+                  <div className="text-xs opacity-70 mt-1">
+                    Looking for jobs
+                  </div>
+                </div>
+              </button>
+
+              <button
+                onClick={() => setSelectedUserType('company')}
+                className={`btn h-auto py-6 rounded-md flex flex-col items-center gap-3 ${
+                  selectedUserType === 'company'
+                    ? 'bg-gray-900 text-white border-0'
+                    : 'btn-outline border-2 border-gray-300'
+                }`}
+              >
+                <Building className="w-8 h-8" />
+                <div className="text-center">
+                  <div className="font-semibold">Employer</div>
+                  <div className="text-xs opacity-70 mt-1">
+                    Hiring talent
+                  </div>
+                </div>
+              </button>
+            </div>
+
+            <div className="modal-action">
+              <button
+                className="btn btn-ghost"
+                onClick={() => setShowUserTypeModal(false)}
+              >
+                Cancel
+              </button>
+              <button
+                className="btn bg-gray-900 text-white hover:bg-gray-800 border-0"
+                onClick={() => handleGoogleSignIn(selectedUserType)}
+                disabled={isGoogleLoading}
+              >
+                {isGoogleLoading ? (
+                  <span className="loading loading-spinner loading-sm"></span>
+                ) : (
+                  'Continue with Google'
+                )}
+              </button>
+            </div>
+          </div>
+          <form method="dialog" className="modal-backdrop">
+            <button onClick={() => setShowUserTypeModal(false)}>close</button>
+          </form>
+        </dialog>
+      )}
 
       <div className="relative">
         <div className="absolute inset-0 flex items-center">
