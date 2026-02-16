@@ -1,4 +1,6 @@
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { useLocation } from 'react-router-dom';
+
 import { Toaster } from 'react-hot-toast';
 import Navbar from './components/layout/Navbar';
 import Footer from './components/layout/Footer';
@@ -32,20 +34,53 @@ import ViewApplications from './pages/company/ViewApplications';
 import CompanyProfile from './pages/company/CompanyProfile';
 import EditJob from './pages/company/EditJob';
 
-function App() {
+
+import { useEffect } from 'react';
+import { useAuthStore } from './store/authStore';
+
+function AuthVerifier() {
+  const { isAuthenticated, checkAuth, logout } = useAuthStore();
+
+  useEffect(() => {
+    if (isAuthenticated) {
+      // Verify the stored token is still valid with the server
+      checkAuth().catch(() => {
+        // Token invalid/expired — clear everything
+        logout();
+      });
+    }
+  }, []); // Only runs once on mount
+
+  return null;
+}
+
+
+function AppLayout() {
   const { isAuthenticated } = useAuth();
+  const location = useLocation();
+
+  const publicPaths = [
+    '/',
+    '/login',
+    '/signup',
+    '/privacy-policy',
+    '/terms-of-service',
+    '/contact'
+  ];
+
+  const isPublicPage = publicPaths.includes(location.pathname);
 
   return (
-    <Router>
-      <div className="min-h-screen flex flex-col">
-        <Toaster position="top-right" />
-        <Navbar />
-        
-        <div className="flex flex-1">
-          {isAuthenticated && <Sidebar />}
-          <main className="flex-1 p-6">
-            <Routes>
-              {/* Public Routes */}
+    <div className="min-h-screen flex flex-col">
+      <Toaster position="top-right" />
+      <Navbar />
+
+      <div className="flex flex-1">
+        {isAuthenticated && !isPublicPage && <Sidebar />}
+
+        <main className="flex-1 p-6">
+          <Routes>
+            {/* Public Routes */}
               <Route path="/" element={<LandingPage />} />
               <Route path="/login" element={<LoginPage />} />
               <Route path="/signup" element={<SignupPage />} />
@@ -150,12 +185,22 @@ function App() {
 
               {/* Fallback */}
               <Route path="*" element={<Navigate to="/" replace />} />
-            </Routes>
-          </main>
-        </div>
-        
-        <Footer />
+          </Routes>
+        </main>
       </div>
+
+      <Footer />
+    </div>
+  );
+}
+
+
+function App() {
+  const { isAuthenticated } = useAuth();
+
+  return (  
+    <Router>
+      <AppLayout />
     </Router>
   );
 }

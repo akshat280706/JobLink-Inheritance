@@ -1,11 +1,25 @@
-import { Link } from 'react-router-dom';
+import { Link,useLocation } from 'react-router-dom';
 import { LogOut, User, Briefcase } from 'lucide-react';
 import { useAuthStore } from '../../store/authStore';
 import { useAuth } from '../../hooks/useAuth';
 
+
 const Navbar = () => {
   const { logout } = useAuthStore();
   const { profile, isAuthenticated } = useAuth();
+  const location = useLocation();
+
+  const publicPaths = [
+  '/',
+  '/login',
+  '/signup',
+  '/privacy-policy',
+  '/terms-of-service',
+  '/contact'
+];
+
+const isPublicPage = publicPaths.includes(location.pathname);
+
 
   const handleLogout = async () => {
     await logout();
@@ -30,7 +44,7 @@ const Navbar = () => {
 
           {/* User Menu */}
           <div className="flex items-center gap-4">
-            {isAuthenticated ? (
+            {isAuthenticated || isPublicPage ? (
               <div className="dropdown dropdown-end">
                 <label tabIndex={0} className="btn btn-ghost btn-circle avatar hover:bg-gray-100">
                   <div className="w-10 h-10 rounded-full bg-gray-900 text-white flex items-center justify-center overflow-hidden">

@@ -66,27 +66,28 @@ export const useApplicationStore = create((set, get) => ({
 
   // FIX: Update both local state AND refetch from server
   updateApplicationStatus: async (applicationId, status, matchScore) => {
-    try {
-      const updated = await applicationsAPI.updateApplicationStatus(
-        applicationId,
-        status,
-        matchScore
-      );
-      
-      // Update the local state immediately
-      set({
-        jobApplications: get().jobApplications.map((a) =>
-          a.id === applicationId ? { ...a, ...updated } : a
-        ),
-      });
-      
-      toast.success('Application status updated successfully');
-      return updated;
-    } catch (error) {
-      toast.error('Failed to update status');
-      throw error;
-    }
-  },
+  try {
+    const updated = await applicationsAPI.updateApplicationStatus(applicationId, status, matchScore);
+    
+    const updatedList = get().jobApplications.map((a) =>
+      a.id === applicationId ? { ...a, ...updated } : a
+    );
+    
+    // Re-sort after update
+    const sorted = [...updatedList].sort((a, b) => {
+      const scoreA = a.match_score ?? -1;
+      const scoreB = b.match_score ?? -1;
+      return scoreB - scoreA;
+    });
+    
+    set({ jobApplications: sorted });
+    toast.success('Application status updated successfully');
+    return updated;
+  } catch (error) {
+    toast.error('Failed to update status');
+    throw error;
+  }
+},
 
   withdrawApplication: async (applicationId) => {
     try {

@@ -161,6 +161,7 @@ export const getJobApplications = async (req, res) => {
         )
       `)
       .eq('job_id', jobId)
+      .order('match_score', { ascending: false, nullsFirst: false })
       .order('applied_at', { ascending: false });
 
     if (error) {
