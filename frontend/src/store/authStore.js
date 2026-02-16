@@ -26,11 +26,18 @@ export const useAuthStore = create((set, get) => ({
     set({ isLoading: true });
     try {
       const response = await authAPI.login(credentials);
+      
+      // Store everything in localStorage
+      localStorage.setItem('token', response.session.access_token);
+      localStorage.setItem('user', JSON.stringify(response.user));
+      localStorage.setItem('profile', JSON.stringify(response.profile));
+      
       set({
         user: response.user,
         profile: response.profile,
         isAuthenticated: true,
       });
+      
       toast.success('Login successful!');
       return response;
     } catch (error) {
@@ -44,7 +51,18 @@ export const useAuthStore = create((set, get) => ({
   logout: async () => {
     try {
       await authAPI.logout();
-      set({ user: null, profile: null, isAuthenticated: false });
+      
+      // Clear everything
+      localStorage.removeItem('token');
+      localStorage.removeItem('user');
+      localStorage.removeItem('profile');
+      
+      set({ 
+        user: null, 
+        profile: null, 
+        isAuthenticated: false 
+      });
+      
       toast.success('Logged out successfully');
     } catch (error) {
       console.error('Logout error:', error);
@@ -54,14 +72,30 @@ export const useAuthStore = create((set, get) => ({
   checkAuth: async () => {
     try {
       const response = await authAPI.checkAuth();
+      
+      // Update localStorage
+      localStorage.setItem('user', JSON.stringify(response.user));
+      localStorage.setItem('profile', JSON.stringify(response.profile));
+      
       set({
         user: response.user,
         profile: response.profile,
         isAuthenticated: true,
       });
+      
       return response;
     } catch (error) {
-      set({ user: null, profile: null, isAuthenticated: false });
+      // Clear everything if check fails
+      localStorage.removeItem('token');
+      localStorage.removeItem('user');
+      localStorage.removeItem('profile');
+      
+      set({ 
+        user: null, 
+        profile: null, 
+        isAuthenticated: false 
+      });
+      
       throw error;
     }
   },
@@ -69,13 +103,32 @@ export const useAuthStore = create((set, get) => ({
   updateProfile: async (profilePic) => {
     try {
       const updatedProfile = await authAPI.updateProfile(profilePic);
-      set({ profile: updatedProfile });
+      
+      // Update localStorage
       localStorage.setItem('profile', JSON.stringify(updatedProfile));
+      
+      set({ profile: updatedProfile });
       toast.success('Profile updated successfully');
+      
       return updatedProfile;
     } catch (error) {
       toast.error('Failed to update profile');
       throw error;
+    }
+  },
+
+  // Force update state from localStorage (used after OAuth callback)
+  syncFromLocalStorage: () => {
+    const token = localStorage.getItem('token');
+    const user = localStorage.getItem('user');
+    const profile = localStorage.getItem('profile');
+
+    if (token && user && profile) {
+      set({
+        user: JSON.parse(user),
+        profile: JSON.parse(profile),
+        isAuthenticated: true,
+      });
     }
   },
 }));

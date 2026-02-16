@@ -1,47 +1,39 @@
+// backend/controllers/resume.controller.js
 import { supabase } from '../lib/supabase.config.js';
 import { uploadToSupabase, deleteFromSupabase } from '../lib/supabaseStorage.js';
 import { analyzeResume } from '../services/ai.service.js';
-
-console.log('🔍 AI Service loaded:', typeof analyzeResume);
 
 /**
  * Upload resume with AI analysis
  */
 export const uploadResume = async (req, res) => {
   try {
-    const candidateId = req.user.id;
+    const candidateId = req.user.id; // ✅ Must come from authenticated user
     const { resumeFile, fileName } = req.body;
 
-    console.log('Upload resume request:', {
-      candidateId,
-      hasFile: !!resumeFile,
-      fileName
-    });
+    console.log('Upload resume request:', { candidateId, hasFile: !!resumeFile, fileName });
 
-    if (!resumeFile) {
-      return res.status(400).json({ message: 'Resume file is required' });
+    if (!resumeFile || !fileName) {
+      return res.status(400).json({ message: 'Resume file and file name are required' });
     }
 
-    /* ------------------------------------
-       1️⃣ Upload to Supabase Storage
-    ------------------------------------ */
+    // ------------------------------------
+    // 1️⃣ Upload to Supabase Storage
+    // ------------------------------------
     const uploadResult = await uploadToSupabase(
       resumeFile,
       'resumes',
       `resume_${candidateId}_${Date.now()}`
     );
 
-    /* ------------------------------------
-       2️⃣ AI Resume Analysis
-    ------------------------------------ */
+    // ------------------------------------
+    // 2️⃣ AI Resume Analysis (safe fallback)
+    // ------------------------------------
     let analysisData;
-
     try {
       analysisData = await analyzeResume(resumeFile, fileName);
     } catch (aiError) {
       console.error('❌ AI analysis failed:', aiError);
-
-      // ✅ SAFE FALLBACK (IMPORTANT)
       analysisData = {
         skills: [],
         score: 0,
@@ -62,16 +54,16 @@ export const uploadResume = async (req, res) => {
       score: analysisData.score
     });
 
-    /* ------------------------------------
-       3️⃣ Save Resume + Analysis to DB
-    ------------------------------------ */
+    // ------------------------------------
+    // 3️⃣ Save Resume + Analysis to DB (RLS safe)
+    // ------------------------------------
     const { data, error } = await supabase
       .from('resumes')
       .insert({
-        candidate_id: candidateId,
+        candidate_id: candidateId, // ✅ Must match auth.uid()
         resume_url: uploadResult.publicUrl,
         storage_path: uploadResult.path,
-        file_name: fileName || uploadResult.fileName,
+        file_name: fileName,
         file_size: uploadResult.fileSize,
         analysis_data: analysisData
       })
@@ -80,7 +72,12 @@ export const uploadResume = async (req, res) => {
 
     if (error) {
       console.error('❌ DB insert error:', error);
-      await deleteFromSupabase(uploadResult.path); // rollback
+
+      // Rollback storage if DB insert fails
+      if (uploadResult.path) {
+        await deleteFromSupabase(uploadResult.path);
+      }
+
       return res.status(400).json({ message: error.message });
     }
 
@@ -105,9 +102,7 @@ export const getMyResumes = async (req, res) => {
       .eq('candidate_id', candidateId)
       .order('updated_at', { ascending: false });
 
-    if (error) {
-      return res.status(400).json({ message: error.message });
-    }
+    if (error) return res.status(400).json({ message: error.message });
 
     res.status(200).json(data || []);
   } catch (error) {
@@ -129,17 +124,10 @@ export const getResume = async (req, res) => {
       .eq('id', resumeId)
       .single();
 
-    if (error || !data) {
-      return res.status(404).json({ message: 'Resume not found' });
-    }
+    if (error || !data) return res.status(404).json({ message: 'Resume not found' });
 
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('user_type')
-      .eq('id', userId)
-      .single();
-
-    if (profile?.user_type === 'candidate' && data.candidate_id !== userId) {
+    // Candidate can only see their own resume
+    if (data.candidate_id !== userId) {
       return res.status(403).json({ message: 'Unauthorized' });
     }
 
@@ -166,9 +154,7 @@ export const updateResumeAnalysis = async (req, res) => {
       .select()
       .single();
 
-    if (error) {
-      return res.status(400).json({ message: error.message });
-    }
+    if (error) return res.status(400).json({ message: error.message });
 
     res.status(200).json(data);
   } catch (error) {
@@ -191,16 +177,18 @@ export const deleteResume = async (req, res) => {
       .eq('candidate_id', candidateId)
       .single();
 
-    if (error || !resume) {
-      return res.status(404).json({ message: 'Resume not found' });
-    }
+    if (error || !resume) return res.status(404).json({ message: 'Resume not found' });
 
-    await supabase
+    // Delete from DB first
+    const { error: deleteError } = await supabase
       .from('resumes')
       .delete()
       .eq('id', resumeId)
       .eq('candidate_id', candidateId);
 
+    if (deleteError) return res.status(400).json({ message: deleteError.message });
+
+    // Delete file from storage
     if (resume.storage_path) {
       await deleteFromSupabase(resume.storage_path);
     }
